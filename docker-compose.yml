@@ -1,0 +1,91 @@
+services:
+  zipkin:
+    container_name: zipkin
+    image: ghcr.io/openzipkin/zipkin-slim:${TAG:-latest}
+    environment:
+      - STORAGE_TYPE=mem
+      - MYSQL_HOST=mysql
+    ports:
+      - "9411:9411"
+    networks:
+      - zipkin
+
+  configserver:
+    image: config-server
+    container_name: configserver
+    ports:
+      - "8888:8888"
+    restart: "no"
+    depends_on:
+      - "zipkin"
+    networks:
+      - zipkin
+  discovery:
+    image: discovery-ms
+    container_name: discovery
+    ports:
+      - "8761:8761"
+    restart: "no"
+    depends_on:
+      - "configserver"
+    networks:
+      - zipkin
+  gateway:
+    image: gateway-ms
+    container_name: gateway
+    ports:
+      - "8070:8070"
+    restart: "no"
+    depends_on:
+      - "configserver"
+    networks:
+      - zipkin
+  
+  school:
+    image: schools-ms
+    container_name: school
+    ports:
+      - "8040:8040"
+    restart: "no"
+    environment: 
+      SPRING_DATASOURCE_URL:  "jdbc:mysql://mysqldb:3308/schools?useUnicode=true&useJDBCCompliantTimezoneShift=true&useLegacyDatetimeCode=false&serverTimezone=UTC"
+    depends_on:
+      - "discovery"
+      - "db"
+    networks:
+      - zipkin
+
+  classroom:
+    image: classroom-ms
+    container_name: classroom
+    ports:
+      - "8050:8050"
+    restart: "no"
+    depends_on:
+      - "discovery"
+    networks:
+      - zipkin
+
+  db:
+    image: mysql:8.0
+    restart: always
+    container_name: mysqldb
+    environment:
+      MYSQL_DATABASE : school
+      MYSQL_USER: mounib
+      MYSQL_PASSWORD: Mounib@123
+    ports:
+      - '3308:3308'
+    expose:
+      - '3308'
+    command: [ 'mysqld', '--port=3308', '--default-authentication-plugin=mysql_native_password' ]
+    networks:
+      - zipkin
+    volumes:
+      - mysqldb_data:/var/lib/mysql
+volumes:
+  mysqldb_data:
+  kafka_data:
+networks:
+  zipkin:
+    driver: bridge
